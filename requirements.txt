@@ -5,3 +5,4 @@ psutil
 opencv-python
 piper-tts
 kokoro-onnx
+moonshine-voice

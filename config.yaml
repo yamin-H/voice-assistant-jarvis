@@ -19,3 +19,13 @@ tts:
     model_file: kokoro-v1.0.int8.onnx
     voice: af_heart
     speed: 1.0
+stt:
+  engine: moonshine
+  speech_level: 0.02     # loudness that counts as "you are talking" (for timing only)
+  moonshine:
+    language: en
+    update_interval: 0.5 # how often live text updates (seconds)
+
+assistant:
+  name: Jarvis
+  user_name: Yamin
