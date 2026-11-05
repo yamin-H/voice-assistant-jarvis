@@ -1,0 +1,12 @@
+# Main settings for Jarvis-lite. Change values here, not in the code.
+
+audio:
+  sample_rate: 16000     # speech models expect 16000
+  input_device: null     # null = use the default microphone
+  output_device: null    # null = use the default speaker
+
+performance:
+  cpu_threads: 0         # 0 = automatic (about 60% of your CPU cores)
+
+paths:
+  models_dir: models
