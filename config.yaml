@@ -10,3 +10,12 @@ performance:
 
 paths:
   models_dir: models
+
+tts:
+  engine: paradee        # paradee, piper or kokoro
+  piper:
+    voice: en_US-lessac-medium
+  kokoro:
+    model_file: kokoro-v1.0.int8.onnx
+    voice: af_heart
+    speed: 1.0
