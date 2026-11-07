@@ -1,0 +1,48 @@
+# ============================================================
+# Jarvis Lite — direct dependencies only.
+#
+# This file lists WHAT the project needs (top-level packages).
+# requirements.txt is the pinned lockfile — install from that.
+#
+# To regenerate requirements.txt after changing this file:
+#   pip install pip-tools
+#   pip-compile requirements.in --output-file requirements.txt
+# ============================================================
+
+# --- Audio I/O ---
+sounddevice
+
+# --- Speech recognition (STT) ---
+moonshine-voice
+
+# --- Text-to-speech engines ---
+piper-tts
+kokoro-onnx
+paradee
+
+# --- Wake word ---
+openwakeword
+
+# --- Vision ---
+opencv-python
+onnxruntime
+
+# --- AI brains ---
+groq
+ollama
+
+# --- Desktop automation ---
+pyautogui
+pillow
+
+# --- Config & utilities ---
+numpy
+pyyaml
+psutil
+
+# --- Agent browser mode ---
+playwright
+
+# --- Web UI Dashboard ---
+fastapi
+uvicorn

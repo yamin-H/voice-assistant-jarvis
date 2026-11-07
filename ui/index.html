@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Jarvis</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#04060d">
+<style>
+  :root {
+    --accent: rgb(72,133,255); --acc: 72,133,255; --ink: 238,243,255;
+    --m: min(140vw, 100vh);
+    --lv: 0;
+    --stroke: rgba(255,255,255,.1);
+    --ease: cubic-bezier(.22,1,.36,1);
+    --glass: linear-gradient(180deg, rgba(255,255,255,.085), rgba(255,255,255,.03));
+    --glass-sh: inset 0 1px 0 rgba(255,255,255,.12), 0 22px 50px -22px rgba(0,0,0,.9), 0 0 40px -18px rgba(var(--acc), .5);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #04060d; color: rgb(var(--ink));
+    font-family: "Inter", "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  body.idle { cursor: none; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  #aura { position: fixed; left: 50%; bottom: -14vh; width: 90vw; height: 46vh; transform: translateX(-50%);
+    pointer-events: none; will-change: opacity; filter: blur(40px);
+    background: radial-gradient(closest-side, rgba(var(--acc), .55), transparent);
+    opacity: calc(.07 + var(--lv) * .3); }
+  #scrim { position: fixed; left: 0; right: 0; bottom: 0; height: 52vh; pointer-events: none;
+    background: linear-gradient(to top, rgba(4,6,13,.9), rgba(4,6,13,.45) 55%, transparent); }
+
+  /* ---- top bar ---- */
+  #top { position: fixed; top: max(22px, 3.2vh); left: 32px; right: 32px; height: 36px; display: flex;
+    justify-content: space-between; align-items: center; pointer-events: none; transition: opacity 1s ease; }
+  body.idle #top { opacity: .28; }
+  #left, #right { display: flex; align-items: center; gap: 16px; }
+  #brand { display: flex; align-items: center; gap: 11px; }
+  #brand b { font-size: 12px; font-weight: 600; letter-spacing: .38em; text-transform: uppercase; }
+  .mark { width: 22px; height: 22px; border-radius: 50%; animation: spin 8s linear infinite;
+    background: conic-gradient(rgb(var(--acc)), rgba(255,255,255,.95), rgba(var(--acc), .15), rgb(var(--acc)));
+    -webkit-mask: radial-gradient(circle, transparent 6px, #000 7px); mask: radial-gradient(circle, transparent 6px, #000 7px);
+    filter: drop-shadow(0 0 8px rgba(var(--acc), .8)); }
+  #dot { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
+    font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: #ff6b7a;
+    background: var(--glass); border: 1px solid var(--stroke); transition: color .4s; }
+  #dot::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 10px currentColor; }
+  #dot::after { content: "offline"; }
+  #dot.on { color: #3ddc97; }
+  #dot.on::after { content: "connected"; }
+  #clock { font-size: 12px; letter-spacing: .2em; opacity: .55; font-variant-numeric: tabular-nums; }
+  #fs { pointer-events: auto; width: 34px; height: 34px; padding: 0; border-radius: 50%; display: grid; place-items: center;
+    color: inherit; cursor: pointer; background: var(--glass); border: 1px solid var(--stroke); opacity: .7;
+    transition: opacity .3s, transform .3s var(--ease); }
+  #fs:hover { opacity: 1; transform: scale(1.07); }
+
+  /* ---- status pill ---- */
+  #status { position: fixed; top: calc(max(22px, 3.2vh) + 1px); left: 50%; transform: translateX(-50%); height: 34px;
+    display: inline-flex; align-items: center; gap: 12px; padding: 0 calc(20px - .3em) 0 18px;
+    border-radius: 999px; font-size: 11px; font-weight: 500; letter-spacing: .3em; text-transform: uppercase;
+    white-space: nowrap; color: rgba(var(--ink), .92); background: var(--glass); border: 1px solid var(--stroke);
+    box-shadow: var(--glass-sh); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%);
+    transition: opacity .25s ease; pointer-events: none; }
+  #status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 12px var(--accent), 0 0 28px rgba(var(--acc), .6); animation: beat 1.8s ease-in-out infinite; }
+  #status:empty, #status.swap { opacity: 0; }
+
+  /* ---- idle greeting ---- */
+  #idle { position: fixed; left: 0; right: 0; top: calc(50vh + var(--m) * .1); text-align: center; pointer-events: none;
+    opacity: 0; transform: translateY(10px); transition: opacity .8s ease, transform .8s var(--ease); }
+  body[data-k=sleeping] #idle { opacity: 1; transform: none; transition: opacity 1.4s ease 1.7s, transform 1.4s var(--ease) 1.7s; }
+  #idle h1 { margin: 0; font-size: clamp(26px, 3.2vw, 42px); font-weight: 300; letter-spacing: -.015em; color: rgba(var(--ink), .9); }
+  #idle p { margin: 14px 0 0; font-size: 12px; letter-spacing: .32em; text-transform: uppercase; opacity: .4; }
+
+  /* ---- conversation stage ---- */
+  #stage { position: fixed; left: 0; right: 0; margin: 0 auto; width: min(900px, 88vw);
+    top: calc(50vh + var(--m) * .078); bottom: calc(max(22px, 3.6vh) + 58px + 30px);
+    padding: 16px 0 6px; display: flex; flex-direction: column; align-items: center; gap: 18px;
+    overflow: hidden; pointer-events: none; will-change: transform;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 28px), transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 28px), transparent 100%); }
+
+  .line { display: flex; flex-wrap: wrap; justify-content: center; gap: .08em .34em; max-width: 100%; text-align: center; }
+  .line:empty { display: none; }
+
+  #user { font-size: clamp(22px, 2.9vw, 38px); font-weight: 300; letter-spacing: -.005em; line-height: 1.3;
+    color: rgb(var(--ink)); border: 1px solid transparent; border-radius: 28px; padding: 0;
+    text-shadow: 0 0 calc(10px + var(--lv) * 30px) rgba(255,255,255,calc(.14 + var(--lv) * .4));
+    transition: font-size .8s var(--ease), padding .8s var(--ease), background .8s ease, border-color .8s ease, color .8s ease, opacity .8s ease; }
+  #user.done { font-size: 13px; font-weight: 400; letter-spacing: .03em; padding: 8px 18px; max-width: min(620px, 100%);
+    color: rgba(var(--ink), .78); background: var(--glass); border-color: var(--stroke); border-radius: 20px; text-shadow: none; }
+
+  #reply { max-width: 820px; font-size: clamp(24px, 3.3vw, 44px); font-weight: 400; letter-spacing: -.015em; line-height: 1.22;
+    color: rgb(var(--ink)); transition: font-size .6s var(--ease);
+    text-shadow: 0 0 calc(12px + var(--lv) * 26px) rgba(var(--acc), calc(.18 + var(--lv) * .3)); }
+  #reply[data-z="m"] { font-size: clamp(20px, 2.4vw, 32px); }
+  #reply[data-z="s"] { font-size: clamp(16px, 1.8vw, 23px); line-height: 1.4; letter-spacing: -.005em; }
+
+  .word { display: inline-flex; white-space: nowrap; perspective: 500px; transition: opacity .7s ease;
+    animation: drift 7s ease-in-out infinite alternate; animation-delay: var(--fd, 0s); }
+  .c { display: inline-block; opacity: 0; will-change: transform, opacity;
+    animation: cIn 1s cubic-bezier(.22,1,.36,1) both; animation-delay: var(--d, 0ms); }
+  @keyframes cIn { 0% { opacity: 0; transform: translate3d(0,.55em,0) scale(.92); } 100% { opacity: 1; transform: none; } }
+  @keyframes drift { from { transform: translate3d(0,-1px,0); } to { transform: translate3d(0,1px,0); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes beat { 50% { transform: scale(1.5); opacity: .55; } }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  #caption { --cs: var(--acc); display: none; align-items: center; gap: 10px; max-width: 100%;
+    font-size: 12px; letter-spacing: .05em; color: rgba(var(--ink), .5); }
+  #caption.show { display: flex; animation: fadeUp .6s var(--ease) both; }
+  #caption[data-s=succeeded] { --cs: 61,220,151; }
+  #caption[data-s=failed], #caption[data-s=blocked] { --cs: 255,93,108; }
+  #caption[data-s=needs_confirmation] { --cs: 255,190,40; }
+  #caption i { width: 6px; height: 6px; border-radius: 50%; flex: none; background: rgb(var(--cs)); box-shadow: 0 0 10px rgb(var(--cs)); }
+  #caption span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 560px; }
+
+  /* ---- voice dock ---- */
+  #dock { position: fixed; left: 0; right: 0; margin: 0 auto; bottom: max(22px, 3.6vh); width: min(660px, 90vw); height: 58px;
+    display: flex; align-items: center; gap: 14px; padding: 0 8px 0 22px; border-radius: 999px; pointer-events: none;
+    background: var(--glass); border: 1px solid rgba(var(--acc), .22); box-shadow: var(--glass-sh);
+    backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%); }
+  .pres { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--accent);
+    box-shadow: 0 0 12px var(--accent), 0 0 26px rgba(var(--acc), .6); animation: beat 2s ease-in-out infinite; }
+  #hint { flex: 1; min-width: 0; font-size: 14px; color: rgba(var(--ink), .62); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; transition: opacity .25s ease; }
+  #hint.swap { opacity: 0; }
+  #eq { display: flex; align-items: center; gap: 3px; height: 26px; flex: none; }
+  #eq span { width: 2px; height: 100%; border-radius: 2px; transform: scaleY(.1); will-change: transform;
+    background: linear-gradient(to top, rgba(var(--acc), .35), var(--accent)); }
+  #go { width: 42px; height: 42px; border-radius: 50%; flex: none; display: grid; place-items: center; color: #0a0d18;
+    background: linear-gradient(180deg, #fff, #cdd5ee);
+    box-shadow: 0 0 0 calc(var(--lv) * 9px) rgba(var(--acc), .28), 0 6px 20px -4px rgba(var(--acc), .7), inset 0 -2px 4px rgba(0,0,0,.15);
+    transition: box-shadow .12s linear; }
+  #go .ic { display: none; }
+  body:not([data-k=thinking]):not([data-k=speaking]) #go .ic-mic { display: block; }
+  body[data-k=thinking] #go .ic-think { display: block; }
+  body[data-k=speaking] #go .ic-talk { display: flex; }
+  .ic-think { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(10,13,24,.2); border-top-color: #0a0d18; animation: spin .8s linear infinite; }
+  .ic-talk { gap: 2.5px; align-items: center; height: 18px; }
+  .ic-talk b { width: 3px; height: 5px; border-radius: 2px; background: #0a0d18; animation: bar 1s ease-in-out infinite; }
+  .ic-talk b:nth-child(2) { animation-delay: .15s; } .ic-talk b:nth-child(3) { animation-delay: .3s; } .ic-talk b:nth-child(4) { animation-delay: .45s; }
+  @keyframes bar { 0%, 100% { height: 5px; } 50% { height: 16px; } }
+
+  /* ---- confirmation card ---- */
+  #confirm { position: fixed; left: 50%; top: 12vh; transform: translate(-50%, -14px) scale(.97);
+    display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 20px; max-width: min(580px, 90vw);
+    background: linear-gradient(180deg, rgba(255,190,40,.17), rgba(255,190,40,.05)); border: 1px solid rgba(255,190,40,.42);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 24px 60px -20px rgba(0,0,0,.9), 0 0 50px -14px rgba(255,190,40,.45);
+    backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%);
+    opacity: 0; transition: opacity .5s var(--ease), transform .6s var(--ease); pointer-events: none; }
+  #confirm.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  #confirm .ico { width: 38px; height: 38px; border-radius: 12px; flex: none; display: grid; place-items: center;
+    font-weight: 700; font-size: 18px; color: #ffcf5a; background: rgba(255,190,40,.16); animation: beat 2s ease-in-out infinite; }
+  #confirm .body { min-width: 0; }
+  #confirm em { display: block; font-style: normal; font-size: 10px; letter-spacing: .32em; text-transform: uppercase;
+    color: #ffcf5a; opacity: .9; margin-bottom: 4px; }
+  #confirmText { font-size: 15px; line-height: 1.4; }
+  #confirm .keys { display: flex; gap: 6px; margin-left: 4px; flex: none; }
+  kbd { font: 500 11px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 7px 10px; border-radius: 8px;
+    letter-spacing: .14em; text-transform: uppercase; background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.18); border-bottom-width: 2px; }
+
+  /* ---- tool activity ---- */
+  #tools { position: fixed; right: 30px; top: 50%; transform: translateY(-50%); width: 290px;
+    display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+  #tools:not(:empty)::before { content: "Activity"; font-size: 10px; letter-spacing: .34em; text-transform: uppercase;
+    opacity: .45; padding: 0 4px 2px; }
+  .card { --st: var(--acc); position: relative; overflow: hidden; display: flex; gap: 12px; align-items: center;
+    padding: 12px 14px; border-radius: 16px; background: var(--glass); border: 1px solid var(--stroke);
+    box-shadow: var(--glass-sh); backdrop-filter: blur(18px) saturate(150%); -webkit-backdrop-filter: blur(18px) saturate(150%);
+    animation: cardIn .6s var(--ease) both; transition: opacity .5s, transform .5s; }
+  .card::before { content: ""; position: absolute; left: 0; top: 18%; bottom: 18%; width: 2px; border-radius: 2px;
+    background: rgb(var(--st)); box-shadow: 0 0 12px rgb(var(--st)); }
+  .card.out { opacity: 0; transform: translateX(30px); }
+  .card[data-s=succeeded] { --st: 61,220,151; }
+  .card[data-s=failed], .card[data-s=blocked] { --st: 255,93,108; }
+  .card[data-s=needs_confirmation] { --st: 255,190,40; }
+  .card[data-s=running]::after { content: ""; position: absolute; inset: 0;
+    background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.12) 50%, transparent 70%);
+    transform: translateX(-100%); animation: sweep 1.4s infinite; }
+  @keyframes sweep { to { transform: translateX(100%); } }
+  @keyframes cardIn { from { opacity: 0; transform: translateX(40px) scale(.97); } to { opacity: 1; transform: none; } }
+  .card i { width: 26px; height: 26px; border-radius: 50%; flex: none; display: grid; place-items: center;
+    font-style: normal; font-size: 13px; font-weight: 700; color: rgb(var(--st));
+    background: rgba(var(--st), .14); box-shadow: 0 0 16px rgba(var(--st), .35); }
+  .card[data-s=running] i { background: none; box-shadow: none; border: 2px solid rgba(var(--st), .22);
+    border-top-color: rgb(var(--st)); animation: spin .8s linear infinite; }
+  .card[data-s=succeeded] i::after { content: "✓"; }
+  .card[data-s=failed] i::after { content: "✕"; }
+  .card[data-s=blocked] i::after { content: "⊘"; }
+  .card[data-s=needs_confirmation] i::after { content: "!"; }
+  .card div { flex: 1; min-width: 0; }
+  .card b { display: block; font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    opacity: .6; font-size: 12px; margin-top: 2px; line-height: 1.35; }
+  .card em { font: normal 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; opacity: .5; flex: none; }
+
+  @media (max-width: 900px) { #tools { display: none; } }
+  @media (max-width: 760px) {
+    #brand b, #clock, #dot::after { display: none; } #dot { padding: 6px; }
+    #confirm .keys { display: none; } #top { left: 18px; right: 18px; }
+  }
+  @media (max-width: 520px) { #eq { display: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .word, .mark, #status::before, .pres, #confirm .ico, .ic-talk b { animation: none; }
+    .c { animation: none; opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="aura"></div>
+<div id="scrim"></div>
+
+<div id="top">
+  <div id="left">
+    <div id="brand" title="Double-click anywhere for fullscreen"><span class="mark"></span><b>Jarvis</b></div>
+    <div id="dot"></div>
+  </div>
+  <div id="right">
+    <div id="clock"></div>
+    <button id="fs" aria-label="Toggle fullscreen">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+    </button>
+  </div>
+</div>
+
+<div id="status" aria-live="polite"></div>
+
+<div id="confirm" role="alertdialog">
+  <div class="ico">!</div>
+  <div class="body"><em>Confirmation required</em><span id="confirmText"></span></div>
+  <div class="keys"><kbd>yes</kbd><kbd>no</kbd></div>
+</div>
+
+<div id="tools"></div>
+
+<div id="idle"><h1 id="greet"></h1><p id="date"></p></div>
+
+<div id="stage">
+  <div id="user" class="line"></div>
+  <div id="reply" class="line" data-z="l" aria-live="polite"></div>
+  <div id="caption"><i></i><span></span></div>
+</div>
+
+<div id="dock">
+  <span class="pres"></span>
+  <div id="hint"></div>
+  <div id="eq"></div>
+  <div id="go">
+    <svg class="ic ic-mic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    <span class="ic ic-think"></span>
+    <span class="ic ic-talk"><b></b><b></b><b></b><b></b></span>
+  </div>
+</div>
+
+<script>
+// ---------- WebGL orb ----------
+const canvas = document.getElementById("gl");
+const gl = canvas.getContext("webgl", { alpha: false, antialias: false, powerPreference: "high-performance" });
+const VS = `attribute vec2 p; void main(){ gl_Position = vec4(p, 0., 1.); }`;
+const FS = `
+precision highp float;
+uniform vec2 uRes, uMouse;
+uniform float uT, uLevel, uPulse, uThink, uSpread, uMorph;
+uniform float uRip[6];
+uniform vec3 uC1, uC2, uC3;
+
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);
+  return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y); }
+float fbm(vec2 p){ float v = 0., a = .5; for(int i = 0; i < 5; i++){ v += a*noise(p); p = p*2.02 + vec2(1.7, 9.2); a *= .5; } return v; }
+float ridged(vec2 p){ float v = 0., a = .5; for(int i = 0; i < 5; i++){ v += a*(1.-abs(noise(p)*2.-1.)); p = p*2.03 + vec2(3.1, 1.7); a *= .5; } return v; }
+
+float stars(vec2 p, float dens, float size){
+  vec2 g = p*dens; vec2 id = floor(g); vec2 f = fract(g) - .5;
+  float h = hash(id);
+  float on = step(.93, h);
+  vec2 off = (vec2(hash(id + 3.1), hash(id + 7.7)) - .5) * .6;
+  float tw = .5 + .5*sin(uT*(1. + h*3.) + h*40.);
+  return on * tw * smoothstep(size, 0., length(f - off));
+}
+
+void main(){
+  float m = min(uRes.x*1.4, uRes.y);
+  vec2 uv = (gl_FragCoord.xy - .5*uRes) / m;
+  uv.y -= .19;
+  float px = 1.5 / m;
+  float r = length(uv);
+  float ang = atan(uv.y, uv.x);
+  vec2 cs = vec2(cos(ang), sin(ang));
+  float R = .125 + uLevel*.016;
+  float lobes = sin(ang*3. + uT*1.3)*.5 + sin(ang*5. - uT*1.9)*.3 + sin(ang*2. + uT*.8)*.4
+              + (fbm(cs*1.3 + uT*.4) - .5)*.8;
+  float Re = R * (1. + lobes*uMorph*.14);
+  float d = r - Re;
+
+  // background: deep navy, soft ambient light, faint nebula + stars
+  vec3 col = vec3(.03, .038, .07);
+  col *= .75 + .5*exp(-r*1.2);
+  float nb = fbm(uv*1.6 + uT*.02 + uMouse*.05);
+  col += mix(uC1, uC3, nb) * nb*nb * .12 * exp(-r*1.4);
+  col += mix(uC1, uC2, .5) * exp(-r*3.2) * (.05 + uLevel*.12);
+  vec2 sp = uv + uMouse*.012;
+  float st = stars(sp, 60., .09) + stars(sp*1.7 + 4., 110., .11)*.7;
+  col += st * mix(vec3(1.), uC2, .45) * .45;
+
+  // sphere
+  float inside = 1. - smoothstep(-px, px, d);
+  vec3 body = vec3(0.);
+  if (inside > 0.){
+    vec2 q = uv / Re;
+    float z = sqrt(max(0., 1. - dot(q, q)));
+    vec3 n = normalize(vec3(q, z));
+    float t = uT*.3;
+    vec2 s1 = n.xy/(1. + z)*1.3 + vec2(t, -t*.6);
+    vec2 s2 = n.xy/(1. + z*.4)*2.1 - vec2(t*.7, t*.4);
+    vec2 w1 = vec2(fbm(s1*1.4 + t), fbm(s1*1.4 - t + 5.));
+    float f1 = fbm(s1*1.2 + w1*2.4);
+    float rg1 = ridged(s1*1.5 + w1*1.6 + t);
+    float rg2 = ridged(s2*1.2 + t*.8);
+    body = mix(uC1*.45, uC2, f1);
+    body = mix(body, uC3, smoothstep(.45, .9, rg2)*.55);
+    body += mix(uC2, uC3, .5) * pow(rg1, 3.) * (1.2 + uLevel*2.4);
+    body += uC3 * pow(rg2, 5.) * .8;
+    // smooth gradient: bright top-left to deep bottom-right
+    float gd = dot(q, vec2(-.55, .83))*.5 + .5;
+    vec3 gradc = mix(uC1*.8, mix(uC2, uC3, .55)*1.05, smoothstep(.05, .95, gd));
+    body = mix(body, gradc, .38);
+    body *= .25 + .9*z;
+    float fres = pow(1. - z, 3.);
+    vec3 irid = .5 + .5*cos(6.2832*(vec3(0., .33, .67) + fres*.8 + uT*.05 + dot(uC2, vec3(1.))*.2));
+    body += fres * mix(uC2, irid, .55) * 1.6;
+    vec3 L = normalize(vec3(uMouse.x*.8 - .3, uMouse.y*.8 + .5, .7));
+    vec3 rf = reflect(-L, n);
+    body += pow(max(rf.z, 0.), 48.)*.7 + pow(max(rf.z, 0.), 8.)*.08;
+    body += uC2 * exp(-dot(q, q)*3.) * (.15 + uLevel*.6);
+    // glass: soft window highlight + warm bounce light
+    vec2 hq = q - vec2(-.38, .46);
+    body += vec3(1.) * exp(-dot(hq, hq)*16.) * .38;
+    vec2 bq = q - vec2(.12, -.78);
+    body += mix(uC2, uC3, .5) * exp(-dot(bq, bq)*7.) * .35;
+  }
+  col = mix(col, body, inside);
+
+  // chromatic outer glow + wide halo
+  vec3 gcol = vec3(exp(-max(d - .004, 0.)*12.), exp(-max(d, 0.)*12.), exp(-max(d + .004, 0.)*12.));
+  col += gcol * mix(uC2, uC3, .4) * (.3 + uLevel*1.0);
+  col += mix(uC1, uC2, .5) * exp(-max(d, 0.)*4.2) * .09 * (.6 + uLevel);
+
+  // slim rotating rings
+  float dash = .3 + .7*step(.5, fract(ang*3./3.14159 + uT*.1));
+  col += uC2 * smoothstep(px*1.5, 0., abs(r - R*1.34)) * dash * .3;
+  col += uC1 * smoothstep(px*1.5, 0., abs(r - R*1.75)) * (.3 + .7*step(.5, fract(ang*5./3.14159 - uT*.07))) * .2;
+
+  // thinking: three fast arcs
+  float aa = fract(ang*3./6.28318 + uT*.5);
+  float seg = smoothstep(0., .04, aa) * (1. - smoothstep(.14, .26, aa));
+  col += uC3 * smoothstep(px*2.2, 0., abs(r - R*1.55)) * seg * uThink * 1.8;
+
+  // orbiting sparks: pulled in while you speak, flung out while Jarvis speaks
+  for (int i = 0; i < 18; i++){
+    float fi = float(i);
+    float hh = hash(vec2(fi, 1.3));
+    float orb = R*(1.35 + hh*.5 + uSpread*uLevel*.4);
+    float dir = mod(fi, 2.) < 1. ? 1. : -1.;
+    float a0 = uT*(.35 + hh*.9)*dir + fi*2.4;
+    vec2 pos = vec2(cos(a0), sin(a0)*(.35 + .6*hash(vec2(fi, 9.1)))) * orb;
+    float tilt = hash(vec2(fi, 4.4))*3.14159;
+    pos = vec2(pos.x*cos(tilt) - pos.y*sin(tilt), pos.x*sin(tilt) + pos.y*cos(tilt));
+    float dd = length(uv - pos);
+    col += mix(uC2, vec3(1.), .4) * (.00002/(dd*dd + .000008)) * (.5 + uLevel*1.5) * (1. - inside*.85);
+  }
+
+  // ripples, one per voice onset
+  for (int i = 0; i < 6; i++){
+    float a = uRip[i];
+    if (a >= 0.){
+      float rr = Re*(1.05 + a*2.4);
+      float fade = (1. - a)*(1. - a);
+      col += mix(uC2, vec3(1.), .25) * smoothstep(.006 + .004*a, 0., abs(r - rr)) * fade * .8;
+    }
+  }
+
+  // state-change shockwave
+  float pr = Re*(1.1 + (1. - uPulse)*2.6);
+  col += mix(uC2, vec3(1.), .3) * smoothstep(.012, 0., abs(r - pr)) * uPulse*uPulse * .9;
+
+  // vignette, grain, tone map
+  col *= 1. - .35*smoothstep(.4, 1.1, length(uv));
+  col += (hash(gl_FragCoord.xy + fract(uT)*100.) - .5) * .02;
+  col = 1. - exp(-col*1.25);
+  gl_FragColor = vec4(col, 1.);
+}`;
+function sh(type, src){ const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s)); return s; }
+const prog = gl.createProgram();
+gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+gl.linkProgram(prog); gl.useProgram(prog);
+gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+const loc = gl.getAttribLocation(prog, "p");
+gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+const U = n => gl.getUniformLocation(prog, n);
+const uRes = U("uRes"), uMouse = U("uMouse"), uT = U("uT"), uLevel = U("uLevel"), uPulse = U("uPulse"),
+      uThink = U("uThink"), uSpread = U("uSpread"), uMorph = U("uMorph"), uRipLoc = U("uRip"),
+      uC1 = U("uC1"), uC2 = U("uC2"), uC3 = U("uC3");
+
+function resize(){
+  const dpr = Math.min(devicePixelRatio || 1, 1.5);
+  canvas.width = innerWidth * dpr; canvas.height = innerHeight * dpr;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+addEventListener("resize", resize); resize();
+
+// ---------- state, colors, level ----------
+const P = {
+  sleeping:  { c1: [.06,.12,.40], c2: [.28,.52,1.0], c3: [.60,.40,1.0], s: .3,  label: "say “hey jarvis”" },
+  listening: { c1: [0,.38,.55],   c2: [.18,.88,1.0], c3: [.35,1.0,.78], s: .7,  label: "listening" },
+  thinking:  { c1: [.32,.10,.62], c2: [.80,.38,1.0], c3: [1.0,.42,.78], s: 2.0, label: "thinking" },
+  speaking:  { c1: [.78,.14,.36], c2: [1.0,.64,.26], c3: [1.0,.36,.58], s: .9,  label: "speaking" },
+  confirm:   { c1: [.66,.42,0],   c2: [1.0,.84,.28], c3: [1.0,.56,.22], s: .6,  label: "awaiting your yes or no" },
+};
+const HINT = {
+  sleeping:  "Say “Hey Jarvis” to wake me",
+  listening: "Listening — go ahead",
+  thinking:  "Thinking…",
+  speaking:  "Speaking…",
+  confirm:   "Waiting for your yes or no",
+};
+const cur = { c1: [...P.sleeping.c1], c2: [...P.sleeping.c2], c3: [...P.sleeping.c3], s: P.sleeping.s };
+let state = "sleeping", confirmMsg = null, lv = 0, lvTarget = 0, phase = 0, last = 0, pulse = 0;
+let think = 0, spread = 0, avg = 0, lastRip = 0, ripIdx = 0;
+let morph = 0;
+const rip = [-1, -1, -1, -1, -1, -1];
+let mx = 0, my = 0, tmx = 0, tmy = 0;
+addEventListener("pointermove", e => { tmx = e.clientX / innerWidth * 2 - 1; tmy = 1 - e.clientY / innerHeight * 2; });
+
+// ---------- chrome: idle fade, fullscreen, clock, greeting ----------
+let idleTimer;
+function wake(){ document.body.classList.remove("idle"); clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => document.body.classList.add("idle"), 4000); }
+addEventListener("pointermove", wake); wake();
+function toggleFs(){ document.fullscreenElement ? document.exitFullscreen()
+  : document.documentElement.requestFullscreen().catch(() => {}); }
+addEventListener("dblclick", toggleFs);
+document.getElementById("fs").addEventListener("click", e => { e.stopPropagation(); toggleFs(); });
+document.getElementById("fs").addEventListener("dblclick", e => e.stopPropagation());
+
+const clockEl = document.getElementById("clock"), greetEl = document.getElementById("greet"), dateEl = document.getElementById("date");
+function tickClock(){
+  const now = new Date(), h = now.getHours();
+  clockEl.textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  greetEl.textContent = h < 5 ? "Hello" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  dateEl.textContent = now.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
+}
+tickClock(); setInterval(tickClock, 10000);
+
+// ---------- voice equalizer (inside the dock) ----------
+const EQ_N = 28, eqEl = document.getElementById("eq"), eqBars = [];
+for (let i = 0; i < EQ_N; i++){ const b = document.createElement("span"); eqEl.appendChild(b); eqBars.push(b); }
+
+function spawnRip(){ rip[ripIdx] = 0; ripIdx = (ripIdx + 1) % rip.length; lastRip = performance.now(); }
+
+const statusEl = document.getElementById("status");
+const hintEl = document.getElementById("hint");
+const stageEl = document.getElementById("stage");
+let shownKey = null;
+function showStatus(key){
+  if (key === shownKey) return;
+  shownKey = key;
+  document.body.dataset.k = key;
+  statusEl.classList.add("swap"); hintEl.classList.add("swap");
+  setTimeout(() => {
+    statusEl.textContent = P[key].label; hintEl.textContent = HINT[key];
+    statusEl.classList.remove("swap"); hintEl.classList.remove("swap");
+  }, 220);
+}
+
+// ---------- text engine: per-letter animation + read-along word highlight ----------
+function mkChar(ch, delay){
+  const s = document.createElement("span");
+  s.className = "c";
+  s.style.setProperty("--d", delay + "ms");
+  s.textContent = ch;
+  return s;
+}
+
+class Line {
+  // auto = every word is fully lit immediately (your own words);
+  // otherwise words start dim and are lit progressively by light() while Jarvis speaks.
+  constructor(el, auto){ this.el = el; this.auto = auto; this.w = []; this.shown = -1; this.len = -1; }
+  clear(){ this.el.innerHTML = ""; this.w = []; this.el.classList.remove("done"); this.shown = -1; this.len = -1; }
+  light(n){
+    n = Math.floor(n);
+    if (n === this.shown && this.w.length === this.len) return;
+    this.shown = n; this.len = this.w.length;
+    this.w.forEach((w, i) => {
+      w.el.style.opacity = i < n ? 1 : Math.max(.18, .55 - (i - n) * .11).toFixed(2);
+    });
+  }
+  set(text, stagger = 0){
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    while (this.w.length > words.length) this.w.pop().el.remove();
+    let k = 0;
+    words.forEach((txt, i) => {
+      const cur = this.w[i];
+      if (cur && cur.txt === txt) return;
+      const el = document.createElement("span");
+      el.className = "word";
+      el.style.setProperty("--fd", (-Math.random() * 7).toFixed(2) + "s");
+      el.style.opacity = (this.auto || i < this.shown) ? 1 : .18;
+      const base = cur ? 0 : Math.min(k * stagger, 1500);
+      [...txt].forEach((ch, j) => el.appendChild(mkChar(ch, base + j * 22)));
+      k++;
+      if (cur){ cur.el.replaceWith(el); this.w[i] = { el, txt }; }
+      else { this.el.appendChild(el); this.w.push({ el, txt }); }
+    });
+  }
+}
+const userEl = document.getElementById("user"), replyEl = document.getElementById("reply");
+const userLine = new Line(userEl, true), replyLine = new Line(replyEl, false);
+let replyTxt = "", userFinal = false;
+let litAcc = 0;
+const WPS = 2.9;   // estimated speaking pace in words per second for the read-along
+
+function sizeReply(){
+  const n = replyLine.w.length;
+  replyEl.dataset.z = n <= 20 ? "l" : n <= 42 ? "m" : "s";
+  stageEl.scrollTop = stageEl.scrollHeight;   // long replies keep the newest words in view
+}
+
+// ---------- caption under the reply (latest tool result) ----------
+const capEl = document.getElementById("caption"), capText = capEl.querySelector("span");
+function setCaption(m){
+  if (!m){ capEl.classList.remove("show"); return; }
+  capEl.dataset.s = m.status;
+  capText.textContent = [m.label, m.summary || (m.status === "running" ? "running…" : m.status)].filter(Boolean).join(" · ");
+  capEl.classList.add("show");
+}
+
+// ---------- frame loop ----------
+function frame(ms){
+  const dt = Math.min((ms - last) / 1000, .05); last = ms;
+  const key = confirmMsg ? "confirm" : state;
+  const p = P[key] || P.sleeping;
+  showStatus(P[key] ? key : "sleeping");
+
+  const k = 1 - Math.exp(-dt * 3.2);
+  for (let i = 0; i < 3; i++){
+    cur.c1[i] += (p.c1[i] - cur.c1[i]) * k;
+    cur.c2[i] += (p.c2[i] - cur.c2[i]) * k;
+    cur.c3[i] += (p.c3[i] - cur.c3[i]) * k;
+  }
+  cur.s += (p.s - cur.s) * k;
+  phase += dt * cur.s;
+  think  += ((key === "thinking" ? 1 : 0) - think) * k;
+  spread += ((key === "speaking" ? 1 : key === "listening" ? -1 : 0) - spread) * k;
+
+  lvTarget *= Math.pow(.94, dt * 60);
+  lv += (lvTarget - lv) * (1 - Math.exp(-dt * (lvTarget > lv ? 28 : 5)));
+  morph += (Math.min(1, lv * 1.3) - morph) * (1 - Math.exp(-dt * 7));
+  const mk = 1 - Math.exp(-dt * 4);
+  mx += (tmx - mx) * mk; my += (tmy - my) * mk;
+  pulse = Math.max(0, pulse - dt * .7);
+  for (let i = 0; i < rip.length; i++) if (rip[i] >= 0){ rip[i] += dt * .85; if (rip[i] > 1) rip[i] = -1; }
+
+  // read-along: light the reply word by word while the voice is speaking
+  if (key === "speaking") litAcc = Math.min(litAcc + dt * WPS, replyLine.w.length + .5);
+  else if (key !== "thinking") litAcc = 1e9;
+  replyLine.light(litAcc);
+
+  let extra = .04;
+  if (key === "thinking") extra = .25 + .15 * Math.sin(ms / 1000 * 4);
+  else if (key === "sleeping") extra = .04 + .05 * (Math.sin(ms / 1000 * 1.2) * .5 + .5);
+  const level = Math.min(1, lv + extra);
+
+  gl.uniform2f(uRes, canvas.width, canvas.height);
+  gl.uniform2f(uMouse, mx, my);
+  gl.uniform1f(uT, phase);
+  gl.uniform1f(uLevel, level);
+  gl.uniform1f(uPulse, pulse);
+  gl.uniform1f(uThink, think);
+  gl.uniform1f(uSpread, spread);
+  gl.uniform1f(uMorph, Math.min(1, morph + (key === "thinking" ? .25 : .05)));
+  gl.uniform1fv(uRipLoc, rip);
+  gl.uniform3fv(uC1, cur.c1); gl.uniform3fv(uC2, cur.c2); gl.uniform3fv(uC3, cur.c3);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  const root = document.documentElement.style;
+  const rgb = cur.c2.map(v => v * 255 | 0);
+  root.setProperty("--accent", `rgb(${rgb})`);
+  root.setProperty("--acc", rgb.join(","));
+  root.setProperty("--lv", Math.min(1, lv).toFixed(3));
+  stageEl.style.transform = `translate3d(${(mx * 5).toFixed(1)}px, ${(-my * 3).toFixed(1)}px, 0)`;
+
+  const t = ms / 1000;
+  for (let i = 0; i < EQ_N; i++){
+    const env = Math.sin(Math.PI * (i + .5) / EQ_N);
+    const w = .5 + .5 * Math.sin(t * (5 + i % 5) + i * .9);
+    eqBars[i].style.transform = `scaleY(${(.1 + level * env * (.3 + .7 * w)).toFixed(3)})`;
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---------- tool cards + confirm ----------
+const toolsEl = document.getElementById("tools");
+const tools = new Map();
+function onTool(m){
+  let el = tools.get(m.id);
+  if (!el){
+    el = document.createElement("div"); el.className = "card"; el._t0 = performance.now();
+    el.innerHTML = "<i></i><div><b></b><small></small></div><em></em>";
+    toolsEl.appendChild(el); tools.set(m.id, el);
+  }
+  el.dataset.s = m.status;
+  el.querySelector("b").textContent = m.label;
+  el.querySelector("small").textContent = m.summary || (m.status === "running" ? "running…" : m.status);
+  if (m.status !== "running"){
+    el.querySelector("em").textContent = ((performance.now() - el._t0) / 1000).toFixed(1) + "s";
+    pulse = Math.max(pulse, .6);
+    setTimeout(() => { el.classList.add("out"); setTimeout(() => { el.remove(); tools.delete(m.id); }, 500); }, 8000);
+  }
+  setCaption(m);
+}
+const confirmEl = document.getElementById("confirm");
+const confirmText = document.getElementById("confirmText");
+
+// ---------- socket ----------
+const dot = document.getElementById("dot");
+function connect(){
+  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+  ws.onopen = () => dot.classList.add("on");
+  ws.onclose = () => { dot.classList.remove("on"); setTimeout(connect, 1000); };
+  ws.onmessage = e => handle(JSON.parse(e.data));
+}
+function handle(m){
+  switch (m.type){
+    case "state":
+      if (m.state !== state) pulse = 1;
+      state = m.state;
+      if (state !== "listening" && state !== "speaking") lvTarget = 0;
+      if (state === "thinking"){
+        userEl.classList.add("done"); replyLine.clear(); replyTxt = ""; litAcc = 0; setCaption(null); sizeReply();
+      }
+      if (state === "sleeping") setTimeout(() => {
+        if (state === "sleeping"){ userLine.clear(); replyLine.clear(); replyTxt = ""; userFinal = false; setCaption(null); }
+      }, 1500);
+      break;
+    case "level": {
+      let v = 0, ok = false;
+      if (m.source === "mic" && state === "listening"){ v = Math.min(1, m.value * 8); ok = true; }
+      if (m.source === "voice" && state === "speaking"){ v = Math.min(1, m.value * 5); ok = true; }
+      if (ok){
+        lvTarget = v;
+        avg += (v - avg) * .12;
+        if (v - avg > .2 && performance.now() - lastRip > 200) spawnRip();
+      }
+      break;
+    }
+    case "transcript":
+      if (userFinal){ userLine.clear(); replyLine.clear(); replyTxt = ""; userFinal = false; setCaption(null); }
+      userLine.set(m.text);
+      if (m.kind === "final"){ userFinal = true; pulse = .9; spawnRip(); }
+      break;
+    case "reply":
+      replyLine.clear(); replyTxt = m.text; litAcc = 0; replyLine.set(m.text, 60); sizeReply();
+      break;
+    case "reply_chunk":
+      replyTxt += " " + m.text; replyLine.set(replyTxt); sizeReply();
+      break;
+    case "tool":
+      onTool(m);
+      break;
+    case "confirm":
+      confirmMsg = m.message;
+      if (m.message) confirmText.textContent = m.message;
+      confirmEl.classList.toggle("show", !!m.message);
+      break;
+  }
+}
+connect();
+</script>
+</body>
+</html>

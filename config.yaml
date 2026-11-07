@@ -29,3 +29,57 @@ stt:
 assistant:
   name: Jarvis
   user_name: Yamin
+
+brain:
+  engine: groq
+  history_turns: 4         # how many back-and-forth exchanges it remembers
+  groq:
+    model: openai/gpt-oss-120b
+    max_reply_tokens: 120
+    temperature: 0.4
+  ollama:
+    model: qwen3.5:0.8b
+    keep_alive: 30m
+    context: 2048
+    max_reply_tokens: 120
+    threads: 0        # 0 = let Ollama decide. Try 3 if your PC lags.          # 0 = let Ollama decide. Try 3 if your PC lags.
+
+wake:
+  enabled: true              # false = always listening, no wake word
+  model: hey_jarvis
+  threshold: 0.5             # lower = wakes more easily, higher = fewer false wakes
+  threshold_while_busy: 0.7  # stricter while Jarvis talks, so it ignores its own voice
+  listen_seconds: 8          # how long it waits for you to speak after the wake word
+  follow_up_seconds: 6       # after answering, how long it keeps listening
+
+
+vision:
+  enabled: true           # false = camera stays off
+  camera_index: 0
+  width: 640
+  height: 480
+  model_file: yolo26n.onnx
+  confidence: 0.25        # lowest score we keep at all
+  sure_confidence: 0.45   # score needed to say "I see" confidently
+  threads: 2              # CPU threads for the detector
+
+agent:
+  enabled: false
+  voice_enabled: true
+  max_steps: 6
+  confirmation_seconds: 60
+  execution:
+    allow_low_risk: true
+
+browser:
+  enabled: true
+  channel: chromium
+  headless: false
+  navigation_timeout_seconds: 15
+  max_visible_items: 30
+  agent_max_actions: 5
+
+logging:
+  level: INFO              # DEBUG | INFO | WARNING | ERROR
+  max_mb: 5                # Rotate when file reaches 5 MB
+  backup_count: 3          # Keep 3 archived log files (jarvis.log.1, etc.)

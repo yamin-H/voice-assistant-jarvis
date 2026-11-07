@@ -1,6 +1,44 @@
+# Virtual environments
 .venv/
+.venv-*/
+env/
+venv/
+ENV/
+
+# Bytecode & Python Cache
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+
+# Large binary model weights (downloaded on demand)
 models/
-*.wav
+
+# Local/legacy user data (modern user data lives in %APPDATA%/JarvisLite)
+data/
+*.bad
+*.tmp
+
+# Secrets & Environment variables
 .env
+.env.local
+
+# Audio and Image outputs
+*.wav
+*.png
+*.jpg
+
+# Test & Coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+junit.xml
+
+# IDE & OS files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+Thumbs.db
+Desktop.ini
+.DS_Store
